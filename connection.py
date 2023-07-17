@@ -3,9 +3,9 @@ class Database:
     def __init__(self):
         self.connection = mysql.connector.connect(
             host = "localhost",
-            port= 8088,
+            port= 3306,
             user = "root",
-            password = "qwerty",
+            password = "root",
             database = "turista_feliz"
         )
         self.cursor = self.connection.cursor()

@@ -1,0 +1,412 @@
+from tkinter import *
+from tkinter import ttk
+from connectionSalubridad import *
+
+TABLA_DIAGNOSTICO = "diagnosticos"
+TABLA_ANIMALES = "animal"
+TABLA_TERAPIAS = "terapias"
+TABLA_MEDICAMENTOS = "medicamentos"
+
+ventana = Tk()
+ventana.title("Seguimiento y Control de Salubridad")
+ventana.geometry("700x550")
+
+db=Database()
+modificar=False
+agregarTerapiaFlag = False
+hasTerapia = True
+editarTerapiaFlag = False
+estado=StringVar()
+fecha=StringVar()
+obs=StringVar()
+especie=StringVar()
+peso=StringVar()
+animales = {}
+
+def seleccionar(event):
+    id = tvDiagnosticos.selection()[0]
+    if int(id)>0:
+        estado.set(tvDiagnosticos.item(id,"values")[1])
+        fecha.set(tvDiagnosticos.item(id,"values")[2])
+        obs.set(tvDiagnosticos.item(id,"values")[3])
+
+def obtenerAnimales():
+    sql= "select * from "+ TABLA_ANIMALES
+    db.cursor.execute(sql)
+    filas=db.cursor.fetchall()
+    for fila in filas:
+        key=fila[0]
+        value=fila[0]
+        animales[key]=value
+
+def option_selected(event):
+    llenarTxts()
+    llenarTabla()
+
+marco = LabelFrame(ventana, text="Formulario de Diagnostico")
+marco.place(x=50,y=50, width=600, height=450)
+
+obtenerAnimales()
+
+#Info Animal
+lblAnimal=Label(marco, text="Animal: ").grid(column=0, row=0,padx=5, pady=5)
+animalesValues = list(animales.keys())
+combo = ttk.Combobox(
+    marco,
+    values = animalesValues
+)
+combo.grid(column=1, row=0)
+combo.current(0)
+combo.bind("<<ComboboxSelected>>", option_selected)
+
+
+def llenarTxts():
+    sql= "select * from "+TABLA_ANIMALES + " where id = " + str(combo.get())
+    db.cursor.execute(sql)
+    filas=db.cursor.fetchall()
+    for fila in filas: 
+        especie.set(fila[1])
+        peso.set(fila[2])
+
+lblPeso=Label(marco, text="Peso: ").grid(column=2, row=0,padx=5, pady=5)
+txtPeso=Entry(marco, textvariable=peso)
+txtPeso.grid(column=3, row=0)
+txtPeso.configure(state="disabled")
+lblEspecie=Label(marco, text="Especie: ").grid(column=0, row=1,padx=5, pady=5)
+txtEspecie=Entry(marco, textvariable=especie)
+txtEspecie.grid(column=1, row=1)
+txtEspecie.configure(state="disabled")
+
+#Entrada Diagnostico
+lblEstado=Label(marco, text="Estado: ").grid(column=0, row=2,padx=5, pady=5)
+txtEstado=Entry(marco, textvariable=estado)
+txtEstado.grid(column=1, row=2)
+
+lblFecha=Label(marco, text="Fecha: ").grid(column=2, row=2,padx=5, pady=5)
+txtFecha=Entry(marco, textvariable=fecha)
+txtFecha.grid(column=3, row=2)
+
+lblObservaciones=Label(marco, text="Observaciones: ").grid(column=0, row=3,padx=5, pady=5)
+txtObs=Entry(marco, textvariable=obs)
+txtObs.grid(column=1, row=3)
+
+
+txtMensaje=Label(marco, text="Historial de Diagnostico", fg="green")
+txtMensaje.grid(column=0, row=4,columnspan=4)
+
+#Mostrar
+
+tvDiagnosticos= ttk.Treeview(marco,selectmode= NONE)
+tvDiagnosticos.grid(column=0,row=5,columnspan=4,padx=4, pady=5)
+tvDiagnosticos["columns"] = ("ID","ESTADO", "FECHA", "OBSERVACIONES")
+tvDiagnosticos.column("#0", width=0, stretch=NO )
+tvDiagnosticos.column("ID", width=45, anchor=CENTER )
+tvDiagnosticos.column("ESTADO", width=120, anchor=CENTER )
+tvDiagnosticos.column("FECHA", width=120, anchor=CENTER )
+tvDiagnosticos.column("OBSERVACIONES", width=300, anchor=CENTER )
+
+tvDiagnosticos.heading("#0", text="")
+tvDiagnosticos.heading("ID", text="ID", anchor=CENTER )
+tvDiagnosticos.heading("ESTADO", text="ESTADO", anchor=CENTER )
+tvDiagnosticos.heading("FECHA", text="FECHA", anchor=CENTER )
+tvDiagnosticos.heading("OBSERVACIONES", text="OBSERVACIONES", anchor=CENTER )
+tvDiagnosticos.bind("<<TreeviewSelect>>", seleccionar)
+
+#Buttons
+btnEliminar= Button(marco, text="Eliminar",command=lambda:eliminar())
+btnEliminar.grid(column=0,row=6)
+btnNuevo= Button(marco, text="Guardar",command=lambda:agregar())
+btnNuevo.grid(column=1,row=6)
+btnModificar= Button(marco, text="Seleccionar",command=lambda:editar())
+btnModificar.grid(column=2,row=6)
+btnTerapia= Button(marco, text="Terapia",command=lambda:openNewWindow(tvDiagnosticos.selection()[0], str(combo.get())))
+btnTerapia.grid(column=3,row=6)
+
+#Funciones
+
+def modificarFalse():
+    global modificar
+    modificar=False
+    tvDiagnosticos.config(selectmode= NONE)
+    limpiar()
+    btnNuevo.config(text="Guardar")
+    btnModificar.config(text="Seleccionar")
+    btnEliminar.config(state=DISABLED)
+
+def modificarTrue():
+    global modificar
+    modificar=True
+    tvDiagnosticos.config(selectmode= BROWSE)
+    btnNuevo.config(text="Nuevo")
+    btnModificar.config(text="Modificar")
+    btnEliminar.config(state=NORMAL)
+
+def validar():
+    return len(estado.get())>0 and len(fecha.get())>0 and len(obs.get())>0
+
+def limpiar():
+    estado.set("")
+    fecha.set("")
+    obs.set("")
+
+def vaciarTabla():
+    filas=tvDiagnosticos.get_children()
+    for fila in filas:
+        tvDiagnosticos.delete(fila)
+
+def llenarTabla():
+    vaciarTabla()
+    sql= "select * from "+TABLA_DIAGNOSTICO + " where id_animal = " + str(combo.get())
+    db.cursor.execute(sql)
+    filas=db.cursor.fetchall()
+    for fila in filas:
+        id=fila[0]
+        tvDiagnosticos.insert("", END, id, text=id, values=fila)
+
+def eliminar():
+    id=tvDiagnosticos.selection()[0]
+    if int(id)>0:
+        sql="delete from "+TABLA_DIAGNOSTICO+" where id="+id
+        db.cursor.execute(sql)
+        db.connection.commit()
+        tvDiagnosticos.delete(id)
+        txtMensaje.config(text="Se ha eliminado el registro correctamente")
+        limpiar()
+    else:
+        txtMensaje.config(text="Seleccione un registro para eliminar")
+
+
+def agregar():
+    if modificar==False:
+        if validar():
+            val= (estado.get(), fecha.get(), obs.get(), combo.get())
+            sql= "insert into "+TABLA_DIAGNOSTICO+" (estado, fecha, observaciones, id_animal) values (%s,%s,%s,%s)"
+            db.cursor.execute(sql,val)
+            db.connection.commit()
+            txtMensaje.config(text="Registro guardado correctamente", fg="green")
+            llenarTabla()
+            limpiar()
+        else:
+            txtMensaje.config(text="Los campos no deben estar vacios", fg="red")
+    else:
+        modificarFalse()
+
+
+def editar():
+    if modificar==True:
+        if validar():
+            val= (estado.get(), fecha.get(), obs.get())
+            id=tvDiagnosticos.selection()[0]
+            sql= "update "+TABLA_DIAGNOSTICO+" set estado=%s, fecha=%s, observaciones=%s where id="+id
+            db.cursor.execute(sql,val)
+            db.connection.commit()
+            txtMensaje.config(text="Registro actualizado correctamente", fg="green")
+            llenarTabla()
+            limpiar()
+        else:
+            txtMensaje.config(text="Los campos no deben estar vacios", fg="red")
+    else:
+        modificarTrue()
+
+def openNewWindow(id, idAnimal):
+
+   
+    # Toplevel object which will
+    # be treated as a new window
+    newWindow = Toplevel(marco)
+    fechaTer = StringVar()
+    medicamento = StringVar()
+    idTerapia = StringVar()
+    idTerapia.set("")
+    medicamentos = {}
+ 
+    # sets the title of the
+    # Toplevel widget
+    newWindow.title("Terapia")
+ 
+    # sets the geometry of toplevel
+    newWindow.geometry("500x200")
+ 
+    # A Label widget to show in toplevel
+    lblDiag=Label(newWindow, text="Animal: "+idAnimal).grid(column=0, row=0,padx=5, pady=5)
+    lblPeso=Label(newWindow, text="Peso: ").grid(column=0, row=1,padx=5, pady=5)
+    txtPeso=Entry(newWindow, textvariable=peso)
+    txtPeso.grid(column=1, row=1)
+    txtPeso.configure(state="disabled")
+    lblEspecie=Label(newWindow, text="Especie: ").grid(column=2, row=1,padx=5, pady=5)
+    txtEspecie=Entry(newWindow, textvariable=especie)
+    txtEspecie.grid(column=3, row=1)
+    txtEspecie.configure(state="disabled")
+    lblDiag=Label(newWindow, text="Diagnostico: "+id).grid(column=1, row=0,padx=5, pady=5)
+    lblFecha=Label(newWindow, text="Fecha Terapia: ").grid(column=0, row=3,padx=5, pady=5)
+    txtFecha=Entry(newWindow, textvariable=fechaTer)
+    txtFecha.grid(column=1, row=3)
+    txtFecha.configure(state="disabled")
+    lblMedicamento=Label(newWindow, text="Medicamento: ").grid(column=2, row=3,padx=5, pady=5)
+    txtMedicamento=Entry(newWindow, textvariable=medicamento)
+    txtMedicamento.grid(column=3, row=3)
+    txtMedicamento.configure(state="disabled")
+    comboTerapia = ttk.Combobox(
+            newWindow
+        ) 
+
+    txtMensajeTerapia=Label(newWindow, text="Terapia", fg="green")
+    txtMensajeTerapia.grid(column=0, row=4,columnspan=4)
+
+    #Flags
+    global hasTerapia
+    hasTerapia = True
+
+    #Buttons
+    btnEliminar= Button(newWindow, text="Eliminar",command=lambda:eliminarTerapia())
+    btnEliminar.grid(column=0,row=5)
+    btnNuevo= Button(newWindow, text="Nuevo",command=lambda:nuevo())
+    btnNuevo.grid(column=1,row=5)
+    btnModificar= Button(newWindow, text="Editar",command=lambda:editarT())
+    btnModificar.grid(column=2,row=5)
+    
+    def editarT():
+        global editarTerapiaFlag
+        global hasTerapia
+        if hasTerapia == False:
+            txtMensajeTerapia.config(text="No existe una terapia", fg="red")
+        else:
+            if editarTerapiaFlag == False:
+                llenarCombo()
+                txtFecha.configure(state="normal")
+                comboTerapia.configure(
+                    state="normal"
+                )
+                btnModificar.configure(
+                    text="Guardar",
+                )
+                editarTerapiaFlag = True
+            else:
+                editarTerapiaFlag = False
+                btnModificar.configure(
+                    text="Editar",
+                )
+                editarTerapia()
+                limpiarTerapia()
+                llenarTerapia()
+                txtFecha.configure(state="disabled")
+                comboTerapia.configure(
+                    state="disabled"
+                )
+                txtMedicamento.configure(state="disabled")
+
+
+    def nuevo():
+        global agregarTerapiaFlag
+        global hasTerapia
+        if hasTerapia:
+            txtMensajeTerapia.config(text="Ya existe una terapia", fg="red")
+        else:
+            if agregarTerapiaFlag == False:
+                llenarCombo()
+                limpiarTerapia()
+                txtFecha.configure(state="normal")
+                comboTerapia.configure(
+                    state="normal"
+                )
+                btnNuevo.configure(
+                    text="Guardar",
+                )
+                agregarTerapiaFlag = True
+            else:
+                agregarTerapiaFlag = False
+                btnNuevo.configure(
+                    text="Nuevo",
+                )
+                agregarTerapia()
+                limpiarTerapia()
+                llenarTerapia()
+                txtFecha.configure(state="disabled")
+                comboTerapia.configure(
+                    state="disabled"
+                )
+                txtMedicamento.configure(state="disabled")
+
+    def validarTerapia():
+        return len(medicamento.get())>0 and len(fechaTer.get())>0
+
+    def limpiarTerapia():
+        fechaTer.set("")
+        medicamento.set("")
+
+    def llenarTerapia():
+        sql="select "+TABLA_TERAPIAS+".id, " + TABLA_TERAPIAS+".fecha," + TABLA_MEDICAMENTOS+".nombre"+" from "+TABLA_TERAPIAS+" inner join "+TABLA_MEDICAMENTOS+" on "+TABLA_TERAPIAS+".id_medicamento ="+ TABLA_MEDICAMENTOS+".id"+" where id_diagnostico="+id
+        db.cursor.execute(sql)
+        filas = db.cursor.fetchall()
+        for fila in filas:
+            idTerapia.set(fila[0])
+            fechaTer.set(fila[1])
+            medicamento.set(fila[2])
+        if db.cursor.rowcount == 0:
+            global hasTerapia
+            hasTerapia = False
+        else: hasTerapia = True
+    
+    def eliminarTerapia():
+        global hasTerapia
+        if hasTerapia:
+            sql="delete from "+TABLA_TERAPIAS+" where id="+idTerapia.get()
+            db.cursor.execute(sql)
+            db.connection.commit()
+            txtMensajeTerapia.config(text="Se ha eliminado el registro correctamente")
+            limpiarTerapia()
+            hasTerapia = False
+            idTerapia.set("")
+        else:
+            txtMensajeTerapia.config(text="No hay registro para eliminar")
+    
+    def option_selected_terapia(event):
+        medicamento.set(medicamentos[comboTerapia.get()])
+    
+    def llenarCombo():
+        sql= "select * from "+ TABLA_MEDICAMENTOS
+        db.cursor.execute(sql)
+        filas=db.cursor.fetchall()
+        for fila in filas:
+            key=fila[1]
+            value=fila[0]
+            medicamentos[key]=value
+        medicamentosValues = list(medicamentos.keys())
+        comboTerapia.configure(
+            values=medicamentosValues
+        )
+        comboTerapia.grid(column=3, row=3)
+        comboTerapia.current(0)
+        comboTerapia.bind("<<ComboboxSelected>>", option_selected_terapia)
+
+    def agregarTerapia():
+        if validarTerapia():
+            val= (id, fechaTer.get(), medicamento.get())
+            sql= "insert into "+TABLA_TERAPIAS+" (id_diagnostico, fecha, id_medicamento) values (%s,%s,%s)"
+            db.cursor.execute(sql,val)
+            db.connection.commit()
+            txtMensajeTerapia.config(text="Registro guardado correctamente", fg="green")
+            limpiarTerapia()
+            llenarTerapia()
+        else:
+            txtMensajeTerapia.config(text="Los campos no deben estar vacios", fg="red")
+
+    def editarTerapia():
+        if hasTerapia:
+            if validarTerapia():
+                val = (fechaTer.get(), medicamento.get())
+                sql= "update "+TABLA_TERAPIAS+" set fecha=%s, id_medicamento=%s where id="+idTerapia.get()
+                db.cursor.execute(sql,val)
+                db.connection.commit()
+                txtMensajeTerapia.config(text="Registro actualizado correctamente", fg="green")
+                llenarTerapia()
+                limpiarTerapia()
+            else:
+                txtMensaje.config(text="Los campos no deben estar vacios", fg="red")
+        else: txtMensajeTerapia.config(text="No hay registro para editar")
+    
+    llenarTerapia()
+
+llenarTabla()
+llenarTxts()
+ventana.mainloop()
